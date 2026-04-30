@@ -1,2 +1,3 @@
-print("Hola Rafael, GitHub Actions está funcionando.")
+print("Hola Rafael, workflow activado.")
+
 
