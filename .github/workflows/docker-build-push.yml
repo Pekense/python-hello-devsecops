@@ -1,6 +1,4 @@
-permissions:
-  id-token: write
-  contents: read
+
 
 name: Build and Push to ACR
 
@@ -8,7 +6,11 @@ on:
   push:
     branches:
       - main
-
+      
+permissions:
+  id-token: write
+  contents: read
+  
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
