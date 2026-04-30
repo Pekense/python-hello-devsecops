@@ -1,1 +1,2 @@
-print("Hola Rafael, tu primera imagen Docker está funcionando.")
+print("Hola Rafael, GitHub Actions está funcionando.")
+
