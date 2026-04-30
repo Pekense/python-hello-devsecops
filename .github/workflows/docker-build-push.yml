@@ -12,7 +12,9 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    environment: production
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - name: Checkout code
@@ -22,7 +24,7 @@ jobs:
         run: |
           echo "Runner: $(uname -a)"
           echo "PWD: $(pwd)"
-          echo "Listing files:"
+          echo "Files:"
           ls -la
           echo "ACR_NAME='${{ secrets.ACR_NAME }}'"
 
@@ -38,16 +40,16 @@ jobs:
         run: |
           az account show
 
+      - name: Login to ACR (via az)
+        run: |
+          echo "Logging into ACR: ${{ secrets.ACR_NAME }}.azurecr.io"
+          az acr login --name "${{ secrets.ACR_NAME }}"
+
       - name: Set up QEMU (for multi-platform builds)
         uses: docker/setup-qemu-action@v2
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-
-      - name: Login to ACR (via az)
-        run: |
-          echo "Logging into ACR: ${{ secrets.ACR_NAME }}.azurecr.io"
-          az acr login --name "${{ secrets.ACR_NAME }}"
 
       - name: Show Docker info (debug)
         run: |
@@ -55,16 +57,16 @@ jobs:
           docker buildx version
           docker info
 
-      - name: Build and push image (buildx)
-        run: |
-          echo "Building and pushing image to ACR..."
-          docker buildx build --platform linux/amd64,linux/arm64 \
-            --push \
-            -t "${{ secrets.ACR_NAME }}.azurecr.io/python-hello-devsecops:latest" \
-            .
+      - name: Build and push image (using docker/build-push-action)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.ACR_NAME }}.azurecr.io/python-hello-devsecops:latest
+            ${{ secrets.ACR_NAME }}.azurecr.io/python-hello-devsecops:${{ github.sha }}
+          platforms: linux/amd64,linux/arm64
 
       - name: Confirm image pushed (optional)
         run: |
-          echo "Listing images in ACR (may require Azure CLI permissions)"
           az acr repository show-tags --name "${{ secrets.ACR_NAME }}" --repository python-hello-devsecops --output table || true
-
