@@ -5,6 +5,7 @@ on:
     branches:
       - main
 
+# Permisos necesarios para OIDC
 permissions:
   id-token: write
   contents: read
@@ -12,9 +13,15 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+
+    # Reafirmar permisos a nivel de job
     permissions:
       id-token: write
       contents: read
+
+    env:
+      IMAGE_NAME: python-hello-devsecops
+      ACR_REGISTRY: ${{ secrets.ACR_NAME }}.azurecr.io
 
     steps:
       - name: Checkout code
@@ -28,7 +35,9 @@ jobs:
           ls -la
           echo "ACR_NAME='${{ secrets.ACR_NAME }}'"
 
+      # Prefer OIDC when AZURE_CLIENT_ID está configurado
       - name: Azure Login with OIDC
+        if: ${{ secrets.AZURE_CLIENT_ID != '' }}
         uses: azure/login@v2
         with:
           auth-type: oidc
@@ -36,12 +45,23 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Verify Azure login
+      # Fallback a Service Principal si no se usa OIDC y existe AZURE_CREDENTIALS
+      - name: Azure Login with Service Principal (fallback)
+        if: ${{ secrets.AZURE_CLIENT_ID == '' && secrets.AZURE_CREDENTIALS != '' }}
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Verify Azure login (debug)
         run: |
-          az account show
+          echo "Azure account (if logged in):"
+          az account show || echo "Not logged in to Azure"
 
       - name: Login to ACR (via az)
         run: |
+          if [ -z "${{ secrets.ACR_NAME }}" ]; then
+            echo "ERROR: ACR_NAME secret is not set"; exit 1
+          fi
           echo "Logging into ACR: ${{ secrets.ACR_NAME }}.azurecr.io"
           az acr login --name "${{ secrets.ACR_NAME }}"
 
@@ -54,8 +74,8 @@ jobs:
       - name: Show Docker info (debug)
         run: |
           docker version
-          docker buildx version
-          docker info
+          docker buildx version || true
+          docker info || true
 
       - name: Build and push image (using docker/build-push-action)
         uses: docker/build-push-action@v4
@@ -63,10 +83,10 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.ACR_NAME }}.azurecr.io/python-hello-devsecops:latest
-            ${{ secrets.ACR_NAME }}.azurecr.io/python-hello-devsecops:${{ github.sha }}
+            ${{ env.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.ACR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           platforms: linux/amd64,linux/arm64
 
       - name: Confirm image pushed (optional)
         run: |
-          az acr repository show-tags --name "${{ secrets.ACR_NAME }}" --repository python-hello-devsecops --output table || true
+          az acr repository show-tags --name "${{ secrets.ACR_NAME }}" --repository ${{ env.IMAGE_NAME }} --output table || true
