@@ -36,4 +36,4 @@ jobs:
 
       - name: Push Docker image
         run: |
-          docker push ${{ secrets.ACR_NAME }}.azurecr.io/python-hello-devsecops:latest
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/python-hello-devsecops:latest .
